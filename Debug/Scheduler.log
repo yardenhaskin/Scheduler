@@ -1,3 +1,1 @@
-﻿  main.cpp
-C:\Users\leose\source\repos\Scheduler\main.cpp(27,44): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
-  Scheduler.vcxproj -> C:\Users\leose\source\repos\Scheduler\Debug\Scheduler.exe
+﻿  Scheduler.vcxproj -> C:\Users\leose\source\repos\Scheduler\Debug\Scheduler.exe

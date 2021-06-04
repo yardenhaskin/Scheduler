@@ -19,6 +19,7 @@ int scheduled_connection_number;
 packet *scheduled_packet;
 int finish_time;
 bool no_more_line_to_read = false;
+list<departure_data> departures_list;
 
 int main(int argc, char* argv[])
 {
@@ -56,33 +57,25 @@ int main(int argc, char* argv[])
 		cout << curr_time << ": " << scheduled_packet->time << " " << scheduled_connection->conn_id << " " << scheduled_packet->len;
 		if (scheduled_packet->weight_provided)
 			cout << " " << scheduled_packet->weight_as_string;
-		//cout << " Debug: " << scheduled_packet->weight << " " << scheduled_packet->last << " " << packets_count;
 		cout << "\n";
 
 		// read lines until the finish time - FIXME: need to include departures
 		if ((curr_packet.time <= finish_time) & !no_more_line_to_read)
 		{
-			update_round(packet_time);
-			curr_time = packet_time;
+			update_weights_until_time(packet_time);
 			push_to_packet_list();
 			push_packets_until_time(finish_time);
 		}
+		else
+			update_weights_until_time(finish_time);
 
 		//finish time arrived, update round and curr_time
 		scheduled_connection = &connection_vector[scheduled_connection_number];
 		scheduled_packet = &scheduled_connection->packet_list.front();
-		update_round(finish_time);
-		curr_time = finish_time;
-		total_weight -= scheduled_packet->weight;
-		total_weight = round(1000000 * total_weight) / 1000000;
 		scheduled_connection->packet_list.pop_front();
 		packets_count -= 1;
-		scheduled_connection = &connection_vector[scheduled_connection_number];
-		if (!scheduled_connection->packet_list.empty())
-			total_weight += scheduled_connection->packet_list.front().weight;
 		if (no_more_line_to_read & (packets_count == 0))
 			break;
-		//printf("%d %d\n", packets_count, no_more_line_to_read);
 	}
 }
 
@@ -119,7 +112,6 @@ bool get_line()
 	string line;
 	if (getline(cin, line))
 	{
-		//cout << line << '\n';
 		line_vector = parse_line(line);
 		packet_time = stoi(line_vector[0]);
 		packet_connection = line_vector[1] + " " + line_vector[2] + " " + line_vector[3] + " " + line_vector[4];
@@ -128,11 +120,6 @@ bool get_line()
 		curr_packet.weight = line_vector.size() == 7 ? stod(line_vector[6]) : -1.0;
 		curr_packet.weight_provided = line_vector.size() == 7;
 		curr_packet.time = packet_time;
-		if (packet_time == 316293)
-		{
-			printf("");//Debug
-		}
-		//cout << packet_time << "\n" << packet_connection << "\n" << curr_packet.len << "\n" << curr_packet.weight << "\n\n";
 		return true;
 	}
 	else
@@ -174,6 +161,9 @@ void find_packet_place()
 
 void push_to_packet_list()
 {
+	departure_data temp_departure;
+	double prev_last;
+
 	find_packet_place();
 	if (curr_packet.weight == -1)
 	{
@@ -185,14 +175,27 @@ void push_to_packet_list()
 		curr_connection->connection_weight = curr_packet.weight;
 		curr_connection->connection_weight_as_string = curr_packet.weight_as_string;
 	}
-	if (curr_packet_list->empty())
+
+	temp_departure.weight = curr_packet.weight;
+	temp_departure.connection_id = curr_connection->conn_id;
+
+	if (departures_list.empty())
 	{
 		total_weight += curr_packet.weight;
 		total_weight = round(1000000*total_weight)/ 1000000;
 		curr_packet.last = curr_round + (curr_packet.len / curr_packet.weight);
+		temp_departure.last = curr_packet.last;
+		departures_list.push_back(temp_departure);
 	}
 	else
-		curr_packet.last = max(curr_packet_list->back().last, curr_round) + (curr_packet.len / curr_packet.weight);
+	{
+		prev_last = get_last_with_same_id_and_update_next_weight(temp_departure);
+		curr_packet.last = max(prev_last, curr_round) + (curr_packet.len / curr_packet.weight);
+		temp_departure.last = curr_packet.last;
+		departures_list.push_back(temp_departure);
+		departures_list.sort();
+	}
+	
 	curr_packet_list->push_back(curr_packet);
 	packets_count += 1;
 }
@@ -202,15 +205,54 @@ void push_packets_until_time(int time)
 	while (true)
 	{
 		if (!get_line())// no more lines to read
+		{
+			update_weights_until_time(finish_time);
 			return;
+		}
 		if (packet_time <= time)
 		{
-			update_round(packet_time);
-			curr_time = packet_time;
+			update_weights_until_time(packet_time);
 			push_to_packet_list();
 		}
 		else
+		{
+			update_weights_until_time(finish_time);
 			return;
+		}
 	}
 }
 
+
+double get_last_with_same_id_and_update_next_weight(departure_data departure)
+{
+	for (list<departure_data>::reverse_iterator it = departures_list.rbegin(); it != departures_list.rend(); ++it)
+	{
+		if (it->connection_id == departure.connection_id)
+		{
+			it->next_weight = departure.weight;
+			return it->last;
+		}
+	}
+	total_weight += departure.weight;
+	total_weight = round(1000000 * total_weight) / 1000000;
+	return 0;
+}
+
+void update_weights_until_time(int time)
+{
+	while (curr_time < time)
+	{
+		update_round(curr_time + 1);
+		curr_time++;
+		if (!departures_list.empty())
+		{
+			while (departures_list.front().last <= (curr_round + 0.000001))
+			{
+				total_weight += departures_list.front().next_weight - departures_list.front().weight;
+				departures_list.pop_front();
+				if (departures_list.empty())
+					break;
+			}
+		}
+	}
+}

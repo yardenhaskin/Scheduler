@@ -11,6 +11,7 @@ using namespace std;
 #include <stdlib.h>
 #include <iostream>
 #include <list>
+#include <algorithm>
 
 //structs
 
@@ -21,6 +22,18 @@ struct packet {
 	double last;
 	bool weight_provided;
 	string weight_as_string;
+};
+
+struct departure_data {
+	double last;
+	double weight;
+	double next_weight = 0;
+	string connection_id;
+
+	bool operator<(const departure_data& x)
+	{
+		return (last < x.last);
+	}
 };
 
 struct connection {
@@ -37,6 +50,8 @@ void update_round(int t_plus_x_time);
 void find_packet_place();
 void push_to_packet_list();
 void push_packets_until_time(int time);
-
+bool compareByLength(const departure_data& a, const departure_data& b);
+double get_last_with_same_id_and_update_next_weight(departure_data departure);
+void update_weights_until_time(int time);
 
 #endif // __main_h__
